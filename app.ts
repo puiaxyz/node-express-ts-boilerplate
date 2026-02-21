@@ -4,10 +4,16 @@ import cookieParser from 'cookie-parser';
 import logger from 'morgan';
 import router from './routes/index.js';
 import compression from 'compression';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 
 const rootDir = process.cwd();
 const app = express();
 
+const isProduction = process.env.NODE_ENV === 'production';
+if (isProduction) {
+  app.set('trust proxy', 1);
+}
 app.use(logger('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
@@ -23,7 +29,13 @@ app.use(
     },
   })
 );
-
+app.use(helmet());
+app.use(
+  rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // 100 requests per 15 minutes
+  })
+);
 app.use(router);
 
 app.use(
@@ -33,10 +45,11 @@ app.use(
     res: express.Response,
     _next: express.NextFunction
   ) => {
-    res.locals.message = err.message;
-    res.locals.error = req.app.get('env') === 'development' ? err : {};
-    res.status(err.status ?? 500);
-    res.render('error');
+    const status = err.status ?? 500;
+    res.status(status).json({
+      message: err.message,
+      ...(req.app.get('env') === 'development' && { error: String(err.stack) }),
+    });
   }
 );
 

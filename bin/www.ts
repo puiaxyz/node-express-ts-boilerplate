@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
+import 'dotenv/config';
 import app from '../app.js';
+import { closeDatabase } from '../src/config/db.config.js';
 import debug from 'debug';
 import http from 'http';
 
@@ -12,6 +14,26 @@ const server = http.createServer(app);
 server.listen(port);
 server.on('error', onError);
 server.on('listening', onListening);
+
+function shutdown(signal: string) {
+  return () => {
+    debug(`Received ${signal}, closing server and database...`);
+    server.close(() => {
+      closeDatabase()
+        .then(() => {
+          debug('Database closed');
+          process.exit(0);
+        })
+        .catch((err) => {
+          console.error('Error closing database:', err);
+          process.exit(1);
+        });
+    });
+  };
+}
+
+process.on('SIGTERM', shutdown('SIGTERM'));
+process.on('SIGINT', shutdown('SIGINT'));
 
 function normalizePort(val: string): number | string | false {
   const port = parseInt(val, 10);
